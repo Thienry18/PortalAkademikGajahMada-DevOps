@@ -15,6 +15,8 @@ Image publik berada di Docker Hub thien18/portal-akademik-frontend, thien18/port
 7. Bootstrap ZIP hanya berisi compose.yaml dan database/schema.sql. Semua image dipatok dengan digest SHA256. Setelah ketiganya tersedia, satu commit ke repo distribusi mempublikasikan paket versi dan stable.json secara bersamaan.
 8. Updater pengguna membaca stable.json, mengunduh seluruh image aplikasi terlebih dahulu, kemudian mengganti layanan aplikasi dan memeriksa health, identitas SHA, halaman frontend, dan tepat empat service.
 
+Digest MySQL diverifikasi langsung pada registry publik. Docker save/load dapat menulis ulang manifest OCI lokal sehingga RepoDigests hasil load belum tentu dapat di-pull dari Docker Hub. Resolver membandingkan seluruh konfigurasi runtime dan lapisan filesystem manifest linux/amd64 resmi dengan image teruji sebelum mematok digest publik; CI juga benar-benar melakukan pull digest tersebut. Referensi database publik yang valid tetap dipertahankan pada rilis berikutnya. Referensi yang hilang hanya dapat diperbaiki bila sama dengan descriptor image lokal teruji dan konfigurasi/filesystem publik identik; perubahan database lain ditolak.
+
 Repo distribusi publik hanya berisi installer, panduan, bootstrap, serta manifest. Tidak memuat .env, password penerbit, kredensial registry, data akademik, atau folder runner. Isi kode aplikasi tetap dapat diperiksa dari image publik, sebagaimana sifat distribusi image aplikasi.
 
 ## Penyimpanan dan pemulihan

@@ -62,6 +62,12 @@ jobs:
           test "$before" = "$after"
           node scripts/check-news-persistence.js verify
           npm run test:smoke
+      - name: Verify public MySQL manifest matches the tested filesystem and configuration
+        shell: pwsh
+        run: |
+          $database = ./scripts/resolve-public-database.ps1
+          docker pull $database
+          if ($LASTEXITCODE -ne 0) { throw 'The verified public database digest cannot be pulled.' }
       - name: Test public updater install, upgrade, data retention, and rollback
         shell: pwsh
         run: ./tests/updater.integration.ps1
