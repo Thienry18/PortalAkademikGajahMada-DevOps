@@ -5,6 +5,8 @@ param(
     [string]$DistributionCheckout
 )
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 if ($Sequence -lt 1) { throw 'Release sequence must be positive.' }
 $sourceRoot = Split-Path $PSScriptRoot -Parent
 if (!$DistributionCheckout) {
@@ -49,7 +51,6 @@ else {
 $versionPath = Join-Path $DistributionCheckout ('releases/' + $Commit)
 New-Item -ItemType Directory -Force -Path $versionPath | Out-Null
 $bootstrap = Join-Path $versionPath 'bootstrap.zip'
-Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (!(Test-Path -LiteralPath $bootstrap)) {
     $zip = [IO.Compression.ZipFile]::Open($bootstrap, [IO.Compression.ZipArchiveMode]::Create)
     try {

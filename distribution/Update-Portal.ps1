@@ -56,6 +56,7 @@ function Expand-Bootstrap($Release) {
     $zipPath = Join-Path $installPath 'bootstrap.download.zip'
     Get-Download $Release.bootstrap.url $zipPath
     if ((Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Release.bootstrap.sha256) { throw 'Bootstrap checksum mismatch.' }
+    Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($zipPath)
     try {
