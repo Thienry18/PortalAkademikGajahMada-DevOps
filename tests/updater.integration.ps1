@@ -9,6 +9,7 @@ New-Item -ItemType Directory -Force -Path $fixture | Out-Null
 $utf8 = New-Object Text.UTF8Encoding($false)
 $channel = Join-Path $fixture 'stable.json'
 $bootstrap = Join-Path $fixture 'bootstrap.zip'
+Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::Open($bootstrap, [IO.Compression.ZipArchiveMode]::Create)
 try {
