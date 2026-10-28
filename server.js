@@ -33,6 +33,7 @@ const nilaiRoutes     = require('./src/routes/nilai.routes');
 const absensiRoutes   = require('./src/routes/absensi.routes');
 const pengumumanRoutes = require('./src/routes/pengumuman.routes');
 const ekskulRoutes    = require('./src/routes/ekskul.routes');
+const beritaRoutes    = require('./src/routes/berita.routes');
 
 // ---------------------------------------------------------------
 const app  = express();
@@ -44,7 +45,8 @@ app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 0));
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT id FROM users LIMIT 1');
-    res.json({ status: 'ok', database: 'connected' });
+    await pool.query('SELECT id FROM berita LIMIT 1');
+    res.json({ status: 'ok', database: 'connected', features: ['berita'] });
   } catch {
     res.status(503).json({ status: 'unhealthy', database: 'unavailable' });
   }
@@ -115,6 +117,7 @@ app.use(`${API}/nilai`,      nilaiRoutes);      // Input/lihat nilai siswa
 app.use(`${API}/absensi`,    absensiRoutes);    // Input/lihat absensi
 app.use(`${API}/pengumuman`, pengumumanRoutes); // CRUD pengumuman sekolah
 app.use(`${API}/ekskul`,     ekskulRoutes);     // Ekskul + pendaftaran
+app.use(`${API}/berita`,     beritaRoutes);     // Berita sekolah
 
 // ---------------------------------------------------------------
 // ROUTE CATCH-ALL — Kembalikan index.html untuk SPA (Single Page)
@@ -162,6 +165,7 @@ app.use((err, req, res, next) => {
 async function startServer() {
   // 1. Test koneksi database dulu sebelum menerima request
   await testConnection();
+  await require('./database/migrate').runMigrations();
 
   // 2. Baru start HTTP server
   app.listen(PORT, () => {

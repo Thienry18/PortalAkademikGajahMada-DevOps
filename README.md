@@ -12,6 +12,8 @@ npm run test:smoke
 
 Akses aplikasi: http://127.0.0.1:8080. Panduan arsitektur, akun demo, deployment lokal, runner, dan rollback tersedia di [docs/DEVOPS.md](docs/DEVOPS.md).
 
+Fitur **Berita** tersedia di menu setiap dashboard. Admin/guru dapat menulis berita, seluruh pengguna dapat membaca dan mencari. Lihat [panduan fitur dan alur CI/CD Berita](docs/BERITA-CICD.md) untuk API, migrasi database lama, pengujian, dan peran empat container.
+
 Workflow [CI-CD Docker](.github/workflows/ci-cd.yml) membangun dan menguji empat container, mempublikasikan tiga image aplikasi ke GHCR, lalu deploy ke Docker Desktop melalui runner Windows lokal. Repo ini mempertahankan riwayat kode dari [Frederycho77/PortalAkademikGajahMada](https://github.com/Frederycho77/PortalAkademikGajahMada).
 
 Panduan instalasi manual di bawah ini berasal dari repo sumber; untuk setup Docker gunakan panduan DevOps di atas.

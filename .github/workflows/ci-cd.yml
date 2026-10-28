@@ -52,12 +52,15 @@ jobs:
       - name: Verify restart retains data and does not duplicate seeding
         shell: bash
         run: |
+          node scripts/check-news-persistence.js prepare
           count_users='const {pool}=require("./src/config/db");pool.query("SELECT COUNT(*) AS count FROM users").then(async([r])=>{console.log(r[0].count);await pool.end()}).catch(()=>process.exit(1))'
           before=$(docker compose exec -T backend node -e "$count_users")
+          docker compose exec -T backend node database/migrate.js
           docker compose restart backend
           docker compose up -d --wait --wait-timeout 120
           after=$(docker compose exec -T backend node -e "$count_users")
           test "$before" = "$after"
+          node scripts/check-news-persistence.js verify
           npm run test:smoke
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
