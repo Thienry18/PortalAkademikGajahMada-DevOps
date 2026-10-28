@@ -238,12 +238,7 @@ DELIMITER ;
 -- DATA AWAL (SEED DATA) — untuk keperluan testing
 -- ============================================================
 
--- Akun Admin (password: Admin@1234)
-INSERT INTO users (username, password, role, nama_lengkap, email)
-VALUES ('admin_portal', '$2b$10$Kzq.dummyhashforadmin123456789ABCDEFGHIJKLMNOPQRSTUVWXYZa', 'admin', 'Administrator Portal', 'admin@smagm.sch.id');
-
--- Catatan: Hash di atas adalah placeholder.
--- Jalankan script seed.js untuk mengisi data dengan hash yang benar.
+-- Akun demo dibuat oleh seed.js dengan bcrypt asli pada startup pertama.
 
 -- Master Mata Pelajaran
 INSERT INTO mata_pelajaran (kode_mapel, nama_mapel, kkm) VALUES

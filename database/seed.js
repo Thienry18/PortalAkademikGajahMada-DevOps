@@ -203,9 +203,9 @@ async function seed() {
   } catch (err) {
     console.error('\n❌ Seeding gagal:', err.message);
     console.error(err);
+    process.exitCode = 1;
   } finally {
     await pool.end();
-    process.exit(0);
   }
 }
 

@@ -1,0 +1,136 @@
+name: CI-CD Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: Build, integration test, and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check backend and frontend JavaScript
+        run: npm run check
+      - name: Generate isolated CI configuration
+        shell: bash
+        run: |
+          umask 077
+          printf 'DB_PASSWORD=%s\nDB_ROOT_PASSWORD=%s\nJWT_SECRET=%s\nAPP_PORT=8080\nSEED_DEMO_DATA=true\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
+          echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - name: Validate Compose and build application images
+        run: |
+          docker compose config --quiet
+          docker compose build --pull
+      - name: Start exactly four healthy services
+        run: |
+          docker compose up -d --wait --wait-timeout 240
+          test "$(docker compose ps --status running --services | wc -l)" -eq 4
+      - name: Test frontend, database, login, and role permissions through gateway
+        run: npm run test:smoke
+      - name: Verify restart retains data and does not duplicate seeding
+        shell: bash
+        run: |
+          count_users='const {pool}=require("./src/config/db");pool.query("SELECT COUNT(*) AS count FROM users").then(async([r])=>{console.log(r[0].count);await pool.end()}).catch(()=>process.exit(1))'
+          before=$(docker compose exec -T backend node -e "$count_users")
+          docker compose restart backend
+          docker compose up -d --wait --wait-timeout 120
+          after=$(docker compose exec -T backend node -e "$count_users")
+          test "$before" = "$after"
+          npm run test:smoke
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the three tested application images with immutable commit tags
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: docker compose push backend frontend gateway
+      - name: Save test diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker compose ps --all > artifacts/containers.txt
+          docker compose logs --no-color --tail 150 > artifacts/compose.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docker-diagnostics-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+      - name: Stop disposable CI stack (volumes expire with hosted runner)
+        if: always()
+        run: docker compose down
+
+  deploy:
+    name: Deploy to local Docker Desktop
+    needs: ci
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, portal-akademik]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      PORTAL_DEPLOY_ROOT: 'D:\mikroskil\DevOps\deployments\portal-akademik'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Check Docker Desktop
+        shell: powershell
+        run: |
+          docker info --format '{{.ServerVersion}}'
+          if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop Linux engine is unavailable.' }
+      - name: Login to private image registry with temporary configuration
+        shell: powershell
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          $config = Join-Path $env:RUNNER_TEMP 'portal-docker-auth'
+          New-Item -ItemType Directory -Force -Path $config | Out-Null
+          $env:REGISTRY_TOKEN | docker --config $config login ghcr.io -u $env:REGISTRY_USER --password-stdin
+          if ($LASTEXITCODE -ne 0) { throw 'Registry login failed.' }
+          "DOCKER_CONFIG=$config" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Deploy tested commit and verify readiness (rollback on failure)
+        shell: powershell
+        run: |
+          ./scripts/deploy.ps1 -DeploymentRoot $env:PORTAL_DEPLOY_ROOT -ImagePrefix ('ghcr.io/' + '${{ github.repository }}'.ToLowerInvariant()) -ImageTag '${{ github.sha }}'
+      - name: Verify deployed frontend and API through gateway
+        shell: powershell
+        run: |
+          $env:BASE_URL = 'http://127.0.0.1:8080'
+          node --test '--test-name-pattern=gateway reaches|protected APIs' tests/smoke.test.js
+          if ($LASTEXITCODE -ne 0) { throw 'Post-deploy smoke tests failed.' }
+      - name: Clear temporary registry authentication
+        if: always()
+        shell: powershell
+        run: |
+          $config = Join-Path $env:RUNNER_TEMP 'portal-docker-auth'
+          if (Test-Path -LiteralPath $config) { docker --config $config logout ghcr.io }

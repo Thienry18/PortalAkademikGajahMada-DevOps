@@ -23,7 +23,7 @@ const morgan     = require('morgan');
 const path       = require('path');
 const rateLimit  = require('express-rate-limit');
 
-const { testConnection } = require('./src/config/db');
+const { pool, testConnection } = require('./src/config/db');
 const { sendError }      = require('./src/utils/response');
 
 // --- Import semua Router ---
@@ -37,6 +37,18 @@ const ekskulRoutes    = require('./src/routes/ekskul.routes');
 // ---------------------------------------------------------------
 const app  = express();
 const PORT = process.env.PORT || 3000;
+const serveFrontend = process.env.SERVE_FRONTEND !== 'false';
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 0));
+
+// Readiness verifies the application schema, not only the HTTP listener.
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT id FROM users LIMIT 1');
+    res.json({ status: 'ok', database: 'connected' });
+  } catch {
+    res.status(503).json({ status: 'unhealthy', database: 'unavailable' });
+  }
+});
 
 // ---------------------------------------------------------------
 // MIDDLEWARE GLOBAL
@@ -82,12 +94,12 @@ const loginLimiter = rateLimit({
   max: 10,
   message: { success: false, message: 'Terlalu banyak percobaan login. Coba lagi dalam 15 menit.' },
 });
-app.use('/api/auth/login', loginLimiter);
+app.use('/api/v1/auth/login', loginLimiter);
 
 // ---------------------------------------------------------------
 // SAJIKAN FILE STATIS (Frontend HTML/CSS/JS)
 // ---------------------------------------------------------------
-app.use(express.static(path.join(__dirname, 'public')));
+if (serveFrontend) app.use(express.static(path.join(__dirname, 'public')));
 
 // Folder uploads bisa diakses publik (foto profil, lampiran)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -109,7 +121,7 @@ app.use(`${API}/ekskul`,     ekskulRoutes);     // Ekskul + pendaftaran
 // ---------------------------------------------------------------
 app.get('*', (req, res) => {
   // Hanya untuk request non-API
-  if (!req.path.startsWith('/api')) {
+  if (serveFrontend && !req.path.startsWith('/api')) {
     return res.sendFile(path.join(__dirname, 'public', 'index.html'));
   }
   // Jika URL API tidak ditemukan

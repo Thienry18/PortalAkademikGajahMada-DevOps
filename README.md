@@ -1,5 +1,21 @@
 # Portal Akademik SMA Gajah Mada Binjai
 
+## Docker dan CI/CD (repo DevOps)
+
+Empat container terpisah: **frontend**, **backend**, **database MySQL**, dan **gateway Nginx**.
+
+```powershell
+./scripts/init-env.ps1
+docker compose up -d --build --wait --wait-timeout 240
+npm run test:smoke
+```
+
+Akses aplikasi: http://127.0.0.1:8080. Panduan arsitektur, akun demo, deployment lokal, runner, dan rollback tersedia di [docs/DEVOPS.md](docs/DEVOPS.md).
+
+Workflow [CI-CD Docker](.github/workflows/ci-cd.yml) membangun dan menguji empat container, mempublikasikan tiga image aplikasi ke GHCR, lalu deploy ke Docker Desktop melalui runner Windows lokal. Repo ini mempertahankan riwayat kode dari [Frederycho77/PortalAkademikGajahMada](https://github.com/Frederycho77/PortalAkademikGajahMada).
+
+Panduan instalasi manual di bawah ini berasal dari repo sumber; untuk setup Docker gunakan panduan DevOps di atas.
+
 Sistem Informasi Akademik berbasis web untuk SMA Gajah Mada Binjai.
 Dibangun dengan Node.js + Express.js (backend), MySQL (database), dan HTML/CSS (frontend).
 
