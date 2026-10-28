@@ -35,6 +35,18 @@ function ConvertTo-CanonicalValue($Value) {
 function ConvertTo-CanonicalJson($Value) {
     return (ConvertTo-CanonicalValue $Value | ConvertTo-Json -Depth 30 -Compress)
 }
+function ConvertTo-RuntimeConfigurationJson($Configuration) {
+    $runtime = [ordered]@{}
+    foreach ($property in $Configuration.PSObject.Properties) {
+        # Older Docker APIs add empty/default container settings that newer
+        # image APIs omit. Their runtime defaults are identical to omission.
+        if ($null -eq $property.Value -or
+            ($property.Value -is [string] -and $property.Value -eq '') -or
+            ($property.Value -is [bool] -and !$property.Value)) { continue }
+        $runtime[$property.Name] = $property.Value
+    }
+    return (ConvertTo-CanonicalJson $runtime)
+}
 $local = @(& docker image inspect mysql:8.4 | ConvertFrom-Json)[0]
 if ($LASTEXITCODE -ne 0 -or !$local -or $local.Os -ne 'linux' -or $local.Architecture -ne 'amd64') { throw 'The tested linux/amd64 MySQL image is unavailable.' }
 if ($PreviousReference) {
@@ -57,9 +69,7 @@ if ($platform.Count -ne 1 -or $platform[0].digest -notmatch '^sha256:[a-f0-9]{64
 $manifest = Get-RegistryJson ('manifests/' + $platform[0].digest)
 if ($manifest.config.digest -notmatch '^sha256:[a-f0-9]{64}$') { throw 'Invalid MySQL configuration digest.' }
 $config = Get-RegistryJson ('blobs/' + $manifest.config.digest)
-if ($config.os -ne $local.Os -or $config.architecture -ne $local.Architecture -or
-    (ConvertTo-CanonicalJson $config.rootfs.diff_ids) -ne (ConvertTo-CanonicalJson $local.RootFS.Layers) -or
-    (ConvertTo-CanonicalJson $config.config) -ne (ConvertTo-CanonicalJson $local.Config)) {
-    throw 'Public MySQL image differs from the filesystem or configuration verified by CI. Refusing database promotion.'
-}
+if ($config.os -ne $local.Os -or $config.architecture -ne $local.Architecture) { throw 'Public MySQL platform differs from the tested image.' }
+if ((ConvertTo-CanonicalJson $config.rootfs.diff_ids) -ne (ConvertTo-CanonicalJson $local.RootFS.Layers)) { throw 'Public MySQL filesystem layers differ from the tested image.' }
+if ((ConvertTo-RuntimeConfigurationJson $config.config) -ne (ConvertTo-RuntimeConfigurationJson $local.Config)) { throw 'Public MySQL runtime configuration differs from the tested image.' }
 return ('docker.io/library/mysql@' + $platform[0].digest)
