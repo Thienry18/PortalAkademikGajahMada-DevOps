@@ -21,8 +21,16 @@ $images = @{
     gateway=($ImagePrefix+'/gateway:'+$ImageTag)
     database='mysql:8.4'
 }
+function Get-FileUri([string]$Path) {
+    $builder = New-Object System.UriBuilder
+    $builder.Scheme = 'file'
+    $builder.Host = ''
+    $builder.Port = -1
+    $builder.Path = $Path
+    return $builder.Uri.AbsoluteUri
+}
 function New-Channel([string]$Version, [Int64]$Sequence, [string]$Frontend = $images.frontend) {
-    $manifest = @{schemaVersion=1;clientCompatibility=1;version=$Version;sequence=$Sequence;images=@{backend=$images.backend;frontend=$Frontend;gateway=$images.gateway;database=$images.database};bootstrap=@{url=([Uri]$bootstrap).AbsoluteUri;sha256=(Get-FileHash $bootstrap -Algorithm SHA256).Hash.ToLowerInvariant()}}
+    $manifest = @{schemaVersion=1;clientCompatibility=1;version=$Version;sequence=$Sequence;images=@{backend=$images.backend;frontend=$Frontend;gateway=$images.gateway;database=$images.database};bootstrap=@{url=(Get-FileUri $bootstrap);sha256=(Get-FileHash $bootstrap -Algorithm SHA256).Hash.ToLowerInvariant()}}
     [IO.File]::WriteAllText($channel, ($manifest | ConvertTo-Json -Depth 10), $utf8)
 }
 function Assert-Equal($Actual, $Expected, [string]$Message) {
@@ -45,7 +53,7 @@ $second = 'b' * 40
 $bad = 'c' * 40
 try {
     New-Channel $first 1
-    & (Join-Path $sourceRoot 'distribution/Install-Portal.ps1') -InstallDirectory $installation -Port 18081 -ChannelUrl ([Uri]$channel).AbsoluteUri -NoAutoUpdate -TestMode
+    & (Join-Path $sourceRoot 'distribution/Install-Portal.ps1') -InstallDirectory $installation -Port 18081 -ChannelUrl (Get-FileUri $channel) -NoAutoUpdate -TestMode
     Assert-Equal $LASTEXITCODE 0 'First installation'
     Assert-Equal (Get-Health).release $first 'First release was started'
     $secretHash = (Get-FileHash (Join-Path $installation '.env')).Hash
@@ -101,7 +109,7 @@ try {
     $checksumRoot = Join-Path $fixture 'checksum-client'
     $failed = $false
     try {
-        & (Join-Path $sourceRoot 'distribution/Install-Portal.ps1') -InstallDirectory $checksumRoot -Port 18082 -ChannelUrl ([Uri]$channel).AbsoluteUri -NoAutoUpdate -TestMode
+        & (Join-Path $sourceRoot 'distribution/Install-Portal.ps1') -InstallDirectory $checksumRoot -Port 18082 -ChannelUrl (Get-FileUri $channel) -NoAutoUpdate -TestMode
         if ($LASTEXITCODE -ne 0) { $failed = $true }
     } catch { $failed = $true }
     Assert-Equal $failed $true 'Corrupt bootstrap was rejected'

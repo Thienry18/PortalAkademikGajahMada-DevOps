@@ -29,7 +29,7 @@ function Assert-DownloadUri([string]$Address) {
     $uri = [Uri]$Address
     if ($TestMode -and $uri.IsFile) { return }
     if ($uri.Scheme -ne 'https' -or $uri.Host -ne 'raw.githubusercontent.com' -or !$uri.AbsolutePath.StartsWith('/Thienry18/PortalAkademikGajahMada-Releases/')) {
-        throw 'Only the configured public HTTPS distribution repository is trusted.'
+        throw ('Only the configured public HTTPS distribution repository is trusted (scheme=' + $uri.Scheme + '; test=' + [bool]$TestMode + ').')
     }
 }
 function Get-Download([string]$Address, [string]$Destination) {
