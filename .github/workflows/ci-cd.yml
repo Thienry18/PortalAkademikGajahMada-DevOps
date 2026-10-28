@@ -23,10 +23,10 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '22'
       - name: Check backend and frontend JavaScript
@@ -38,7 +38,7 @@ jobs:
           printf 'DB_PASSWORD=%s\nDB_ROOT_PASSWORD=%s\nJWT_SECRET=%s\nAPP_PORT=8080\nSEED_DEMO_DATA=true\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env
           echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
           echo "IMAGE_TAG=$GITHUB_SHA" >> "$GITHUB_ENV"
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4.4.1
       - name: Validate Compose and build application images
         run: |
           docker compose config --quiet
@@ -61,7 +61,7 @@ jobs:
           npm run test:smoke
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -69,6 +69,20 @@ jobs:
       - name: Publish the three tested application images with immutable commit tags
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: docker compose push backend frontend gateway
+      - name: Package the exact tested images for local deployment
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          docker image save "$IMAGE_PREFIX/backend:$IMAGE_TAG" "$IMAGE_PREFIX/frontend:$IMAGE_TAG" "$IMAGE_PREFIX/gateway:$IMAGE_TAG" mysql:8.4 | gzip -1 > artifacts/docker-images.tar.gz
+      - uses: actions/upload-artifact@v7.0.2
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          name: tested-docker-images-${{ github.sha }}
+          path: artifacts/docker-images.tar.gz
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
       - name: Save test diagnostics
         if: always()
         shell: bash
@@ -76,11 +90,13 @@ jobs:
           mkdir -p artifacts
           docker compose ps --all > artifacts/containers.txt
           docker compose logs --no-color --tail 150 > artifacts/compose.log 2>&1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: docker-diagnostics-${{ github.run_id }}
-          path: artifacts/
+          path: |
+            artifacts/containers.txt
+            artifacts/compose.log
           retention-days: 7
       - name: Stop disposable CI stack (volumes expire with hosted runner)
         if: always()
@@ -94,11 +110,10 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: read
     env:
       PORTAL_DEPLOY_ROOT: 'D:\mikroskil\DevOps\deployments\portal-akademik'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
           clean: true
@@ -107,30 +122,22 @@ jobs:
         run: |
           docker info --format '{{.ServerVersion}}'
           if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop Linux engine is unavailable.' }
-      - name: Login to private image registry with temporary configuration
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: tested-docker-images-${{ github.sha }}
+          path: ${{ runner.temp }}/portal-images
+      - name: Load the exact images verified by CI, including MySQL
         shell: powershell
-        env:
-          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REGISTRY_USER: ${{ github.actor }}
         run: |
-          $config = Join-Path $env:RUNNER_TEMP 'portal-docker-auth'
-          New-Item -ItemType Directory -Force -Path $config | Out-Null
-          $env:REGISTRY_TOKEN | docker --config $config login ghcr.io -u $env:REGISTRY_USER --password-stdin
-          if ($LASTEXITCODE -ne 0) { throw 'Registry login failed.' }
-          "DOCKER_CONFIG=$config" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          docker image load --input (Join-Path $env:RUNNER_TEMP 'portal-images/docker-images.tar.gz')
+          if ($LASTEXITCODE -ne 0) { throw 'Loading tested images failed.' }
       - name: Deploy tested commit and verify readiness (rollback on failure)
         shell: powershell
         run: |
-          ./scripts/deploy.ps1 -DeploymentRoot $env:PORTAL_DEPLOY_ROOT -ImagePrefix ('ghcr.io/' + '${{ github.repository }}'.ToLowerInvariant()) -ImageTag '${{ github.sha }}'
+          ./scripts/deploy.ps1 -DeploymentRoot $env:PORTAL_DEPLOY_ROOT -ImagePrefix ('ghcr.io/' + '${{ github.repository }}'.ToLowerInvariant()) -ImageTag '${{ github.sha }}' -SkipPull
       - name: Verify deployed frontend and API through gateway
         shell: powershell
         run: |
           $env:BASE_URL = 'http://127.0.0.1:8080'
           node --test '--test-name-pattern=gateway reaches|protected APIs' tests/smoke.test.js
           if ($LASTEXITCODE -ne 0) { throw 'Post-deploy smoke tests failed.' }
-      - name: Clear temporary registry authentication
-        if: always()
-        shell: powershell
-        run: |
-          $config = Join-Path $env:RUNNER_TEMP 'portal-docker-auth'
-          if (Test-Path -LiteralPath $config) { docker --config $config logout ghcr.io }

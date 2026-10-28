@@ -56,9 +56,10 @@ Workflow `.github/workflows/ci-cd.yml` berjalan pada push main, pull request ke 
 4. Tes integrasi melalui gateway: UI/CSS/dashboard, health database, login empat role, endpoint terlindungi, kredensial salah, serta pembatasan API admin.
 5. Restart backend, cek jumlah user tidak berubah, lalu ulangi tes integrasi.
 6. Hanya push main/manual main yang mempublikasikan image teruji ke GHCR dengan tag SHA commit. Pull request tidak publish dan tidak deploy.
-7. Job CD menunggu CI sukses, lalu berjalan di runner Windows lokal berlabel `portal-akademik`. CD menarik image commit yang sama, menjalankan empat container, memeriksa health/UI, dan mencatat release. Kegagalan startup/readiness mengembalikan image aplikasi release sebelumnya jika tersedia. Tidak ada migrasi database destruktif otomatis.
+7. CI juga menyimpan keempat image teruji (termasuk MySQL) dalam artifact `tested-docker-images-SHA` selama satu hari. CD berjalan di runner Windows lokal berlabel `portal-akademik`, mengunduh artifact dari run yang sama, dan menjalankan `docker image load`. Tidak ada build ulang pada komputer lokal.
+8. CD menjalankan empat container, memeriksa health/UI, dan mencatat release. Kegagalan startup/readiness mengembalikan image aplikasi release sebelumnya jika tersedia. Tidak ada migrasi database destruktif otomatis.
 
-Tidak perlu Docker Hub token atau PAT dalam repo. Publish/pull memakai `GITHUB_TOKEN` dengan izin packages terbatas. Login GHCR pada runner lokal memakai konfigurasi Docker sementara dan logout pada akhir job. Jangan membagikan folder konfigurasi runner yang berisi identitas runner.
+Tidak perlu Docker Hub token atau PAT dalam repo. Publish GHCR memakai `GITHUB_TOKEN` dengan izin packages terbatas. Deployment lokal memakai artifact dari CI sehingga tidak memerlukan login registry pada Windows. Untuk menjalankan ulang deployment setelah artifact kedaluwarsa, jalankan workflow penuh melalui workflow_dispatch agar CI membuat artifact baru. Jangan membagikan folder konfigurasi runner yang berisi identitas runner.
 
 ## Deployment persisten pada komputer ini
 
