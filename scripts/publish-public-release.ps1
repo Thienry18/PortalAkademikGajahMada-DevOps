@@ -22,6 +22,9 @@ $oldManifestPath = Join-Path $DistributionCheckout 'stable.json'
 $previous = if (Test-Path -LiteralPath $oldManifestPath) { Get-Content -LiteralPath $oldManifestPath -Raw | ConvertFrom-Json } else { $null }
 if ($previous -and [Int64]$previous.sequence -ge $Sequence) { throw 'A newer or equal release sequence already exists.' }
 $images = @{}
+$previousDatabase = if ($previous) { [string]$previous.images.database } else { '' }
+$images.database = & (Join-Path $PSScriptRoot 'resolve-public-database.ps1') -PreviousReference $previousDatabase
+Write-Output ('Verified anonymous database image: ' + $images.database)
 foreach ($service in @('frontend','backend','gateway')) {
     $name = 'thien18/portal-akademik-' + $service
     $target = $name + ':' + $Commit
@@ -39,14 +42,6 @@ foreach ($service in @('frontend','backend','gateway')) {
     if ($digest -notmatch '^sha256:[a-f0-9]{64}$') { throw ('Invalid registry digest: ' + $service) }
     $images[$service] = 'docker.io/' + $name + '@' + $digest
     Write-Output ('Verified anonymous image: ' + $images[$service])
-}
-if ($previous) { $images.database = $previous.images.database }
-else {
-    $digests = & docker image inspect mysql:8.4 --format '{{json .RepoDigests}}' | ConvertFrom-Json
-    if ($LASTEXITCODE -ne 0) { throw 'The tested MySQL image is unavailable.' }
-    $mysql = @($digests | Where-Object { $_ -match '^(docker\.io/library/)?mysql@sha256:[a-f0-9]{64}$' }) | Select-Object -First 1
-    if (!$mysql) { throw 'Cannot pin the tested MySQL image.' }
-    $images.database = 'docker.io/library/' + ($mysql -replace '^docker\.io/library/', '')
 }
 $versionPath = Join-Path $DistributionCheckout ('releases/' + $Commit)
 New-Item -ItemType Directory -Force -Path $versionPath | Out-Null
