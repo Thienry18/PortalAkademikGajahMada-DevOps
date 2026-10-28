@@ -29,6 +29,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      APP_RELEASE: ${IMAGE_TAG:-local}
       DB_HOST: database
       DB_PORT: 3306
       DB_USER: portal

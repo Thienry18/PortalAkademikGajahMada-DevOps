@@ -46,7 +46,7 @@ app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT id FROM users LIMIT 1');
     await pool.query('SELECT id FROM berita LIMIT 1');
-    res.json({ status: 'ok', database: 'connected', features: ['berita'] });
+    res.json({ status: 'ok', database: 'connected', features: ['berita'], release: process.env.APP_RELEASE || 'development' });
   } catch {
     res.status(503).json({ status: 'unhealthy', database: 'unavailable' });
   }

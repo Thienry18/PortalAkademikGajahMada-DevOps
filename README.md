@@ -2,6 +2,8 @@
 
 ## Docker dan CI/CD (repo DevOps)
 
+Distribusi untuk pengguna umum dan pembaruan otomatis tersedia melalui [repo installer publik](https://github.com/Thienry18/PortalAkademikGajahMada-Releases). Lihat [panduan penerbit](docs/PUBLIC-UPDATES.md) untuk alur Docker Hub, kanal stable, installer Windows, pengujian, dan rollback.
+
 Empat container terpisah: **frontend**, **backend**, **database MySQL**, dan **gateway Nginx**.
 
 ```powershell

@@ -1,0 +1,64 @@
+services:
+  database:
+    image: ${PORTAL_DATABASE_IMAGE:?Missing pinned database image}
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: smas_gajah_mada
+      MYSQL_USER: portal
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Missing database password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Missing root password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks: [data]
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_PASSWORD" mysql -h 127.0.0.1 -u portal smas_gajah_mada -e "SELECT 1 FROM users LIMIT 1" >/dev/null 2>&1']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+  backend:
+    image: ${PORTAL_BACKEND_IMAGE:?Missing pinned backend image}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      APP_RELEASE: ${PORTAL_RELEASE:?Missing release version}
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_USER: portal
+      DB_PASSWORD: ${DB_PASSWORD:?Missing database password}
+      DB_NAME: smas_gajah_mada
+      JWT_SECRET: ${JWT_SECRET:?Missing JWT secret}
+      JWT_EXPIRES_IN: 8h
+      SERVE_FRONTEND: 'false'
+      TRUST_PROXY_HOPS: 1
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    volumes:
+      - uploads:/app/uploads
+    networks: [app, data]
+    depends_on:
+      database:
+        condition: service_healthy
+  frontend:
+    image: ${PORTAL_FRONTEND_IMAGE:?Missing pinned frontend image}
+    restart: unless-stopped
+    networks: [app]
+  gateway:
+    image: ${PORTAL_GATEWAY_IMAGE:?Missing pinned gateway image}
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${APP_PORT:-8080}:8080'
+    networks: [app]
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+volumes:
+  mysql_data:
+  uploads:
+networks:
+  app:
+  data:
+    internal: true
