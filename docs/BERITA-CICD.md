@@ -1,5 +1,3 @@
-> Rencana fitur untuk tahap setelah push pada video. Rilis awal demo belum menyajikan menu, halaman, atau API Berita. Tabel dan data yang sudah ada tidak dihapus.
-
 # Fitur Berita: perubahan kode sampai deployment
 
 Halaman: http://127.0.0.1:8080/pages/berita.html. Menu Berita tersedia pada dashboard admin, guru, siswa, dan orang tua.

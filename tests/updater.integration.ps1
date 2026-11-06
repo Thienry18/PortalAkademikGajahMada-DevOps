@@ -61,9 +61,10 @@ try {
     $compose = Get-ClientComposeArguments
     $databaseId = & docker @compose ps -q database
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect original database container.' }
-    $countUsers = 'const {pool}=require("./src/config/db");pool.query("SELECT COUNT(*) AS count FROM users").then(async([rows])=>{console.log(rows[0].count);await pool.end()}).catch(()=>process.exit(1))'
-    $originalUsers = & docker @compose exec -T backend node -e $countUsers
-    if ($LASTEXITCODE -ne 0 -or [int]$originalUsers -lt 1) { throw 'Could not snapshot baseline users.' }
+    $login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18081/api/v1/auth/login' -ContentType 'application/json' -Body (@{username='admin_portal';password='Admin@1234'} | ConvertTo-Json)
+    $headers = @{Authorization='Bearer '+$login.data.token}
+    $created = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:18081/api/v1/berita' -Headers $headers -ContentType 'application/json' -Body (@{judul='Updater persistence proof';isi='This news must survive a real update and a failed release rollback.'}|ConvertTo-Json)
+    $newsId = $created.data.id
     Run-Updater
     Assert-Equal (Get-State).release.version $first 'Repeated checks are idempotent'
     Write-Output 'PASS updater: fresh install and no-op check.'
@@ -74,8 +75,9 @@ try {
     Assert-Equal (Get-FileHash (Join-Path $installation '.env')).Hash $secretHash 'Local secrets were retained'
     $compose = Get-ClientComposeArguments
     Assert-Equal (& docker @compose ps -q database) $databaseId 'Existing MySQL container was retained'
-    Assert-Equal (& docker @compose exec -T backend node -e $countUsers) $originalUsers 'Baseline user records survived the release change'
-    Write-Output 'PASS updater: version update preserves secrets, database container, and user records.'
+    $news = Invoke-RestMethod -Uri ('http://127.0.0.1:18081/api/v1/berita/'+$newsId) -Headers $headers
+    Assert-Equal $news.data.judul 'Updater persistence proof' 'User data survived the update'
+    Write-Output 'PASS updater: version update preserves secrets, database container, and news.'
 
     $badContext = Join-Path $fixture 'bad-image'
     New-Item -ItemType Directory -Path $badContext | Out-Null
@@ -86,7 +88,8 @@ try {
     Run-Updater 1
     Assert-Equal (Get-State).release.version $second 'Failed release did not become current'
     Assert-Equal (Get-Health).release $second 'Previous backend was restored'
-    Assert-Equal (& docker @compose exec -T backend node -e $countUsers) $originalUsers 'Baseline user records survived the release change'
+    $news = Invoke-RestMethod -Uri ('http://127.0.0.1:18081/api/v1/berita/'+$newsId) -Headers $headers
+    Assert-Equal $news.data.judul 'Updater persistence proof' 'User data survived rollback'
     Run-Updater
     Assert-Equal (Get-Health).release $second 'Failed release is not retried on every check'
     Write-Output 'PASS updater: unhealthy release rolled back and repeated failure was suppressed.'
