@@ -1,5 +1,7 @@
 # Portal Akademik SMA Gajah Mada Binjai
 
+Kondisi awal demo: fitur Berita belum tersedia pada API dan halaman. Infrastruktur Docker, rilis publik, pembaruan otomatis, serta data lama tetap dipertahankan. Fitur Berita akan ditambahkan melalui commit saat rekaman.
+
 ## Docker dan CI/CD (repo DevOps)
 
 Distribusi untuk pengguna umum dan pembaruan otomatis tersedia melalui [repo installer publik](https://github.com/Thienry18/PortalAkademikGajahMada-Releases). Lihat [panduan penerbit](docs/PUBLIC-UPDATES.md) untuk alur Docker Hub, kanal stable, installer Windows, pengujian, dan rollback.

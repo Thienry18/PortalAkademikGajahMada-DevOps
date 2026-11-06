@@ -44,11 +44,8 @@ try {
     $port = if ($portLine) { ($portLine -split '=', 2)[1] } else { '8080' }
     $health = Invoke-RestMethod -Uri ('http://127.0.0.1:' + $port + '/health') -TimeoutSec 15
     if ($health.database -ne 'connected') { throw 'Gateway cannot reach the database.' }
-    if ('berita' -notin $health.features) { throw 'Berita backend feature is not ready.' }
     $page = Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:' + $port + '/') -TimeoutSec 15
     if ($page.StatusCode -ne 200 -or $page.Content -notmatch 'loginForm') { throw 'Frontend verification failed.' }
-    $newsPage = Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:' + $port + '/pages/berita.html') -TimeoutSec 15
-    if ($newsPage.StatusCode -ne 200 -or $newsPage.Content -notmatch 'editorForm') { throw 'Berita frontend verification failed.' }
     @{ imagePrefix = $ImagePrefix; imageTag = $ImageTag; deployedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath $releasePath -Encoding UTF8
     Write-Output ('Deployment verified: http://127.0.0.1:' + $port + ' | commit ' + $ImageTag)
     Invoke-Compose -ComposeCommand @('ps')
